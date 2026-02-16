@@ -1,0 +1,18 @@
+run = "npm run start"
+hidden = [".config", "node_modules", "dist"]
+
+entrypoint = "src/main.tsx"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "npm run build && npx serve dist"]
+deploymentTarget = "static"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
+
+[env]
+VITE_RPC_URL = "https://rpc.sltn.io"
