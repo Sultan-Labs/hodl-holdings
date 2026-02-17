@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import SwapPage from './pages/SwapPage';
 import PoolsPage from './pages/PoolsPage';
 import LaunchpadPage from './pages/LaunchpadPage';
+import WalletConnectModal from './components/WalletConnectModal';
 import { 
   WalletState, 
   connectWallet, 
@@ -11,6 +12,13 @@ import {
   onWalletEvent,
   isWalletInstalled 
 } from './api/defiApi';
+import {
+  restoreWalletLinkSession,
+  isWalletLinkConnected,
+  getWalletLinkAddress,
+  getWalletLinkPublicKey,
+  disconnectWalletLink,
+} from './api/walletLink';
 
 // Sultan Logo SVG
 const SultanLogo = () => (
@@ -36,6 +44,8 @@ function App() {
   });
   const [connecting, setConnecting] = useState(false);
   const [walletInstalled, setWalletInstalled] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [connectionType, setConnectionType] = useState<'extension' | 'walletlink' | null>(null);
 
   // Check if wallet is installed and restore session
   useEffect(() => {
@@ -44,9 +54,29 @@ function App() {
       setWalletInstalled(installed);
       
       if (installed) {
-        // Restore existing connection
+        // Restore existing Chrome extension connection
         const state = await getWalletState();
-        setWallet(state);
+        if (state.connected) {
+          setWallet(state);
+          setConnectionType('extension');
+          return;
+        }
+      }
+      
+      // Try to restore WalletLink session
+      const restored = await restoreWalletLinkSession();
+      if (restored && isWalletLinkConnected()) {
+        const address = getWalletLinkAddress();
+        const publicKey = getWalletLinkPublicKey();
+        if (address) {
+          setWallet({
+            connected: true,
+            address,
+            publicKey,
+            balance: '0', // Balance will be fetched separately
+          });
+          setConnectionType('walletlink');
+        }
       }
     };
     checkWallet();
@@ -72,25 +102,46 @@ function App() {
   }, []);
 
   const handleConnect = useCallback(async () => {
-    setConnecting(true);
-    try {
-      const state = await connectWallet();
-      setWallet(state);
-    } catch (error) {
-      console.error('Failed to connect wallet:', error);
-      // Show user-friendly message
-      if (!walletInstalled) {
-        alert('Please install Sultan Wallet extension from Chrome Web Store');
+    // If Chrome extension is installed, use it
+    if (walletInstalled) {
+      setConnecting(true);
+      try {
+        const state = await connectWallet();
+        setWallet(state);
+        setConnectionType('extension');
+      } catch (error) {
+        console.error('Failed to connect wallet:', error);
+        // Fall back to WalletLink modal
+        setShowWalletModal(true);
+      } finally {
+        setConnecting(false);
       }
-    } finally {
-      setConnecting(false);
+    } else {
+      // No extension - show WalletLink modal
+      setShowWalletModal(true);
     }
   }, [walletInstalled]);
 
-  const handleDisconnect = useCallback(async () => {
-    await disconnectWallet();
-    setWallet({ connected: false, address: null, publicKey: null, balance: '0' });
+  const handleWalletLinkConnect = useCallback((address: string, publicKey: string | null) => {
+    setWallet({
+      connected: true,
+      address,
+      publicKey,
+      balance: '0',
+    });
+    setConnectionType('walletlink');
+    setShowWalletModal(false);
   }, []);
+
+  const handleDisconnect = useCallback(async () => {
+    if (connectionType === 'extension') {
+      await disconnectWallet();
+    } else if (connectionType === 'walletlink') {
+      await disconnectWalletLink();
+    }
+    setWallet({ connected: false, address: null, publicKey: null, balance: '0' });
+    setConnectionType(null);
+  }, [connectionType]);
 
   // Navigation items
   const navItems = [
@@ -213,6 +264,13 @@ function App() {
           </div>
         </div>
       </footer>
+
+      {/* WalletLink Connect Modal */}
+      <WalletConnectModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+        onConnected={handleWalletLinkConnect}
+      />
     </div>
   );
 }
