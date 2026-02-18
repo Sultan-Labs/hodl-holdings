@@ -93,9 +93,13 @@ class WalletLinkClient {
     await this.connect();
 
     // Generate deep link URL
-    const keyBase64 = this.arrayToBase64(sessionKey);
-    const sessionData = `sultan://wl?s=${sessionId}&k=${encodeURIComponent(keyBase64)}&b=${encodeURIComponent(RELAY_URL)}&n=${encodeURIComponent('HODL Holdings')}&o=${encodeURIComponent(window.location.origin)}`;
+    // Use URL-safe base64 (replace +/ with -_) to avoid encoding issues
+    const keyBase64 = this.arrayToBase64(sessionKey).replace(/\+/g, '-').replace(/\//g, '_');
+    // Don't encode params individually since URLSearchParams handles that
+    const sessionData = `sultan://wl?s=${sessionId}&k=${keyBase64}&b=${encodeURIComponent(RELAY_URL)}&n=${encodeURIComponent('HODL Holdings')}&o=${encodeURIComponent(window.location.origin)}`;
     const deepLinkUrl = `${WALLET_URL}/connect?session=${encodeURIComponent(sessionData)}`;
+    
+    console.log('[WalletLink] Generated session:', { sessionId: sessionId.substring(0, 8) + '...', deepLinkUrl: deepLinkUrl.substring(0, 80) + '...' });
 
     // Save session
     this.saveSession();
