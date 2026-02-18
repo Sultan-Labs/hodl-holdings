@@ -1,0 +1,21 @@
+{
+  "name": "Hodl Holdings",
+  "short_name": "Hodl",
+  "description": "Advanced DeFi Platform on SULTAN",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#10143C",
+  "theme_color": "#10143C",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
