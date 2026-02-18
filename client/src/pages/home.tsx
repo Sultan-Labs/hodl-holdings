@@ -123,8 +123,8 @@ export default function HomePage() {
                 const Icon = item.icon;
                 return (
                   <Link key={item.title} href={item.href}>
-                    <a
-                      className="group flex flex-col items-center text-center transition-all duration-500 hover:-translate-y-1"
+                    <div
+                      className="group flex flex-col items-center text-center transition-all duration-500 hover:-translate-y-1 cursor-pointer"
                       data-testid={`card-${item.testId}`}
                     >
                       <div className="h-16 w-16 rounded-[24px] glass-soft flex items-center justify-center mb-6 border border-white/5 group-hover:border-[hsl(var(--ring))]/30 transition-all duration-500">
@@ -138,7 +138,7 @@ export default function HomePage() {
                           {item.desc}
                         </div>
                       </div>
-                    </a>
+                    </div>
                   </Link>
                 );
               })}

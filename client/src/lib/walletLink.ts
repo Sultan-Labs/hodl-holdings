@@ -213,9 +213,11 @@ class WalletLinkClient {
 
   /**
    * Add event handler
+   * @returns {() => void} Function to unsubscribe
    */
-  on(handler: WalletLinkEventHandler): void {
+  on(handler: WalletLinkEventHandler): () => void {
     this.eventHandlers.add(handler);
+    return () => this.off(handler);
   }
 
   /**
@@ -479,7 +481,7 @@ class WalletLinkClient {
 
   private async deriveKey(sessionKey: Uint8Array): Promise<CryptoKey> {
     // Create a copy to ensure we have a proper ArrayBuffer
-    const keyBuffer = new Uint8Array(sessionKey).buffer as ArrayBuffer;
+    const keyBuffer = (sessionKey as any).buffer || new Uint8Array(sessionKey).buffer;
     const keyMaterial = await crypto.subtle.importKey(
       'raw',
       keyBuffer,
@@ -543,16 +545,22 @@ class WalletLinkClient {
 
   private generateRandomId(): string {
     return Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map(b => (b as number).toString(16).padStart(2, '0'))
       .join('');
   }
 
   private arrayToBase64(arr: Uint8Array): string {
-    return btoa(String.fromCharCode(...arr));
+    return btoa(String.fromCharCode(...Array.from(arr)));
   }
 
   private base64ToArray(base64: string): Uint8Array {
-    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const binString = atob(base64);
+    const len = binString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binString.charCodeAt(i);
+    }
+    return bytes;
   }
 }
 

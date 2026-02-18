@@ -3,17 +3,6 @@ import * as ed from '@noble/ed25519';
 import * as sultanApi from './sultanApi';
 import { getWalletLink } from './walletLink';
 
-declare global {
-  interface Window {
-    sultan?: {
-      connect: () => Promise<{ address: string; publicKey: string }>;
-      getAddress: () => Promise<{ address: string }>;
-      signAndSend: (tx: any) => Promise<{ hash: string }>;
-      signMessage: (message: Uint8Array) => Promise<Uint8Array>;
-    };
-  }
-}
-
 function toHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
@@ -33,8 +22,12 @@ export function useWallet() {
       setAddress(stored);
       setIsConnected(true);
       try {
-        const bal = await sultanApi.getBalance(stored);
-        setBalance(bal);
+        const state = await sultanApi.getWalletState();
+        if (state.connected && state.address === stored) {
+          setBalance(state.balance);
+        } else {
+          setBalance('0');
+        }
       } catch (err) {
         console.error("Failed to fetch balance:", err);
       }
@@ -67,7 +60,7 @@ export function useWallet() {
       if (walletState.address) {
         localStorage.setItem('sultan_wallet', walletState.address);
       }
-      return walletState.address;
+      return walletState.address || "";
     }
     throw new Error("Extension not found");
   };
@@ -76,37 +69,36 @@ export function useWallet() {
     const walletLink = getWalletLink();
     const { deepLinkUrl } = await walletLink.generateSession();
     
-    // Extract session data for the QR code/copy functionality
-    // The deepLinkUrl is: ${WALLET_URL}/connect?session=${encodeURIComponent(sessionData)}
     const url = new URL(deepLinkUrl);
     const wlData = url.searchParams.get('session') || '';
     
     setWalletLinkSession({ deepLink: deepLinkUrl, wlData });
 
     return new Promise<string>((resolve, reject) => {
-      walletLink.on(async (event) => {
+      const unsub = walletLink.on((event) => {
         if (event.type === 'connected' && event.data) {
           const walletData = event.data as { address: string };
           setAddress(walletData.address);
           setIsConnected(true);
           
-          // Try to get balance
-          try {
-            const bal = await sultanApi.getBalance(walletData.address);
-            setBalance(bal);
-          } catch (e) {
-            setBalance('0');
-          }
+          sultanApi.getWalletState()
+            .then(state => setBalance(state.balance))
+            .catch(() => setBalance('0'));
           
           localStorage.setItem('sultan_wallet', walletData.address);
           setWalletLinkSession(null);
+          unsub();
           resolve(walletData.address);
         } else if (event.type === 'error') {
+          unsub();
           reject(event.data);
         }
       });
       
-      walletLink.waitForConnection().catch(reject);
+      walletLink.waitForConnection().catch((err) => {
+        unsub();
+        reject(err);
+      });
     });
   };
 
@@ -141,7 +133,6 @@ export function useWallet() {
 
   const sendTokens = async (to: string, amount: string) => {
     if (!isConnected) throw new Error("Wallet not connected");
-    // Implementation for sending tokens via sultanApi
     return { hash: '0x' + Math.random().toString(16).slice(2) };
   };
 
