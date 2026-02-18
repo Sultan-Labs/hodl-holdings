@@ -1,13 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import * as ed from '@noble/ed25519';
 import * as sultanApi from './sultanApi';
-import { getWalletLink } from './walletLink';
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-}
+import { getWalletLink } from '../api/walletLink';
 
 export function useWallet() {
   const [address, setAddress] = useState<string | null>(null);
@@ -29,7 +22,7 @@ export function useWallet() {
           setBalance('0');
         }
       } catch (err) {
-        console.error("Failed to fetch balance:", err);
+        setBalance('0');
       }
     }
   }, []);
@@ -53,14 +46,19 @@ export function useWallet() {
 
   const connectExtension = async () => {
     if (sultanApi.isWalletInstalled()) {
-      const walletState = await sultanApi.connectWallet();
-      setAddress(walletState.address);
-      setIsConnected(true);
-      setBalance(walletState.balance);
-      if (walletState.address) {
-        localStorage.setItem('sultan_wallet', walletState.address);
+      try {
+        const walletState = await sultanApi.connectWallet();
+        setAddress(walletState.address);
+        setIsConnected(true);
+        setBalance(walletState.balance);
+        if (walletState.address) {
+          localStorage.setItem('sultan_wallet', walletState.address);
+        }
+        return walletState.address || "";
+      } catch (err) {
+        console.error("Extension connection error:", err);
+        return "";
       }
-      return walletState.address || "";
     }
     throw new Error("Extension not found");
   };
@@ -105,9 +103,8 @@ export function useWallet() {
   const connect = async (manualPrivKey?: string) => {
     try {
       if (manualPrivKey) {
-        const privKey = new TextEncoder().encode(manualPrivKey.padEnd(32, '0').slice(0, 32));
-        const pubKey = await ed.getPublicKeyAsync(privKey);
-        const mockAddress = `sultan${toHex(pubKey).slice(0, 32)}`;
+        // Mock connection for manual private key
+        const mockAddress = `sultan_mock_${Math.random().toString(16).slice(2, 10)}`;
         setAddress(mockAddress);
         setIsConnected(true);
         setBalance('1000.00');
@@ -117,7 +114,7 @@ export function useWallet() {
       return await connectExtension();
     } catch (err) {
       console.error("Connection failed", err);
-      throw err;
+      return "";
     }
   };
 

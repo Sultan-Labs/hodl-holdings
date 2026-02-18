@@ -19,7 +19,7 @@ interface WalletConnectModalProps {
 type ConnectionStatus = 'idle' | 'generating' | 'waiting' | 'connected' | 'error';
 
 export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalProps) {
-  const { connect, connectPWA, isExtensionAvailable, walletLinkSession } = useWallet();
+  const { connect, connectPWA, isExtensionAvailable, walletLinkSession, isConnected } = useWallet();
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -55,11 +55,10 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
 
   // Close modal when connected
   useEffect(() => {
-    if (open && !walletLinkSession && status === 'waiting') {
-      // Successful connection via PWA
+    if (open && isConnected && status === 'waiting') {
       onOpenChange(false);
     }
-  }, [walletLinkSession, open, status, onOpenChange]);
+  }, [isConnected, open, status, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
