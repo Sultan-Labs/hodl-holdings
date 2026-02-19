@@ -195,27 +195,19 @@ export default function HomePage() {
                   ].map((p, idx) => {
                     const Icon = p.icon;
                     return (
-                      <motion.div
+                      <div
                         key={p.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.5, delay: 0.1 * idx }}
                         className="glass-soft rounded-[32px] p-10 text-left relative overflow-hidden group/pillar border-white/5 hover:border-white/20 transition-all duration-500"
                         style={{
-                          boxShadow: "0 0 40px -20px rgba(85,255,172,0.3)",
+                          boxShadow: "0 4px 24px -12px rgba(0,0,0,0.5)",
                         }}
                         data-testid={`card-platform-${p.id}`}
                       >
-                        <motion.div
-                          initial={{ opacity: 0 }}
-                          whileInView={{ opacity: 0.8 }}
-                          viewport={{ once: true, margin: "-100px" }}
-                          transition={{ duration: 1, ease: "easeOut", delay: 0.1 * idx }}
-                          className="absolute inset-0 bg-gradient-to-br from-[#55FFAC]/10 via-transparent to-[#2C8CFF]/5 pointer-events-none"
+                        <div
+                          className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none"
                         />
                         <div
-                          className="absolute -inset-10 opacity-0 group-hover/pillar:opacity-100 transition-opacity duration-700"
+                          className="absolute -inset-10 opacity-0 group-hover/pillar:opacity-100 transition-opacity duration-700 pointer-events-none"
                           aria-hidden="true"
                           style={{ background: `radial-gradient(400px at 50% 50%, ${p.accent}, transparent 80%)` }}
                         />
@@ -230,7 +222,7 @@ export default function HomePage() {
                             {p.desc}
                           </div>
                         </div>
-                      </motion.div>
+                      </div>
                     );
                   })}
                 </div>
