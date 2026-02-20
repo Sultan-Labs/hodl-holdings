@@ -39,6 +39,7 @@ interface Session {
   isConnected: boolean;
   walletAddress: string | null;
   walletPublicKey: string | null;
+  relayMachineId: string | null;
   createdAt: number;
 }
 
@@ -83,20 +84,22 @@ class WalletLinkClient {
       isConnected: false,
       walletAddress: null,
       walletPublicKey: null,
+      relayMachineId: null,
       createdAt: Date.now(),
     };
 
     // Derive encryption key
     this.session.encryptionKey = await this.deriveKey(sessionKey);
 
-    // Connect to relay
+    // Connect to relay and wait for session_ack (captures machineId for multi-instance routing)
     await this.connect();
 
     // Generate deep link URL
     // Use URL-safe base64 (replace +/ with -_) to avoid encoding issues
     const keyBase64 = this.arrayToBase64(sessionKey).replace(/\+/g, '-').replace(/\//g, '_');
-    // Don't encode params individually since URLSearchParams handles that
-    const sessionData = `sultan://wl?s=${sessionId}&k=${keyBase64}&b=${encodeURIComponent(RELAY_URL)}&n=${encodeURIComponent('HODL Holdings')}&o=${encodeURIComponent(window.location.origin)}`;
+    // Include relay machine ID (m=) so the wallet connects to the same Fly.io instance
+    const machineParam = this.session.relayMachineId ? `&m=${encodeURIComponent(this.session.relayMachineId)}` : '';
+    const sessionData = `sultan://wl?s=${sessionId}&k=${keyBase64}&b=${encodeURIComponent(RELAY_URL)}${machineParam}&n=${encodeURIComponent('HODL Holdings')}&o=${encodeURIComponent(window.location.origin)}`;
     const deepLinkUrl = `${WALLET_URL}/connect?session=${encodeURIComponent(sessionData)}`;
     
     console.log('[WalletLink] Generated session:', { sessionId: sessionId.substring(0, 8) + '...', deepLinkUrl: deepLinkUrl.substring(0, 80) + '...' });
@@ -283,11 +286,11 @@ class WalletLinkClient {
         console.log('[WalletLink] Connected to relay');
         await this.sendInitSession();
         this.startHeartbeat();
-        resolve();
+        // Don't resolve yet — wait for session_ack in handleMessage
       };
 
       this.ws.onmessage = (event) => {
-        this.handleMessage(event.data).catch(console.error);
+        this.handleMessage(event.data, resolve).catch(console.error);
       };
 
       this.ws.onerror = (error) => {
@@ -320,7 +323,7 @@ class WalletLinkClient {
     this.ws.send(JSON.stringify(message));
   }
 
-  private async handleMessage(data: string): Promise<void> {
+  private async handleMessage(data: string, connectResolve?: () => void): Promise<void> {
     let message: RelayMessage | null = null;
 
     // 1. Try parsing as JSON (relay control messages & wrapped encrypted messages)
@@ -356,6 +359,15 @@ class WalletLinkClient {
       switch (message.type) {
         case MessageType.SESSION_ACK:
           console.log('[WalletLink] Session acknowledged');
+          // Capture relay machine ID for multi-instance routing
+          if (message.payload?.machineId && this.session) {
+            this.session.relayMachineId = message.payload.machineId as string;
+            console.log('[WalletLink] Relay machine:', this.session.relayMachineId);
+          }
+          // Resolve the connect() promise now that session is confirmed
+          if (connectResolve && message.payload?.created) {
+            connectResolve();
+          }
           break;
 
         case MessageType.CONNECT_RESPONSE:
