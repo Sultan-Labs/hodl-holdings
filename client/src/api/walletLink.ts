@@ -212,10 +212,11 @@ class WalletLinkClient {
   }
 
   /**
-   * Add event handler
+   * Add event handler. Returns an unsubscribe function.
    */
-  on(handler: WalletLinkEventHandler): void {
+  on(handler: WalletLinkEventHandler): () => void {
     this.eventHandlers.add(handler);
+    return () => this.eventHandlers.delete(handler);
   }
 
   /**
@@ -320,18 +321,38 @@ class WalletLinkClient {
   }
 
   private async handleMessage(data: string): Promise<void> {
+    let message: RelayMessage | null = null;
+
+    // 1. Try parsing as JSON (relay control messages & wrapped encrypted messages)
     try {
-      let message: RelayMessage;
-      
-      // Try parsing as plain JSON first (relay control messages are unencrypted)
+      const parsed = JSON.parse(data);
+      if (parsed.data && typeof parsed.data === 'string') {
+        // Wrapped encrypted message from peer — decrypt the data field
+        try {
+          const decrypted = await this.decrypt(parsed.data);
+          message = JSON.parse(decrypted);
+        } catch {
+          // Couldn't decrypt — silently ignore
+          return;
+        }
+      } else {
+        // Plain relay control message (session_ack, error, session_end, etc.)
+        message = parsed as RelayMessage;
+      }
+    } catch {
+      // Not valid JSON — try decrypting as raw (backward compat)
       try {
-        message = JSON.parse(data);
-      } catch {
-        // If not valid JSON, try decrypting (peer messages are encrypted)
         const decrypted = await this.decrypt(data);
         message = JSON.parse(decrypted);
+      } catch {
+        return;
       }
+    }
 
+    if (!message) return;
+
+    // 2. Process the parsed message
+    try {
       switch (message.type) {
         case MessageType.SESSION_ACK:
           console.log('[WalletLink] Session acknowledged');
@@ -350,20 +371,11 @@ class WalletLinkClient {
           break;
 
         case MessageType.ERROR:
-          console.error('[WalletLink] Error:', message.payload);
-          this.emit({ type: 'error', data: message.payload });
+          console.warn('[WalletLink] Relay error:', message.payload);
           break;
       }
     } catch (error) {
-      // Message might not be encrypted (e.g., plain ACK from relay)
-      try {
-        const message = JSON.parse(data);
-        if (message.type === 'session_ack' || message.type === 'ack') {
-          console.log('[WalletLink] Session acknowledged (plain)');
-        }
-      } catch {
-        console.error('[WalletLink] Failed to handle message:', error);
-      }
+      console.error('[WalletLink] Error processing message:', error);
     }
   }
 
@@ -418,7 +430,13 @@ class WalletLinkClient {
     }
 
     const encrypted = await this.encrypt(JSON.stringify(message));
-    this.ws.send(encrypted);
+    // Wrap in JSON envelope so the relay can read sessionId/type for routing
+    this.ws.send(JSON.stringify({
+      sessionId: message.sessionId,
+      type: message.type,
+      data: encrypted,
+      timestamp: message.timestamp,
+    }));
   }
 
   private startHeartbeat(): void {

@@ -136,11 +136,17 @@ export function useWallet() {
   /**
    * Connect via PWA – first tries BroadcastChannel (instant, same-browser),
    * then falls back to WalletLink relay (QR code / deep link).
+   *
+   * @param walletWindow  A pre-opened window reference (opened during user
+   *   gesture) that will be redirected to wallet.sltn.io with the session
+   *   deep link.  Passing a pre-opened window avoids popup-blocker issues.
    */
-  const connectPWA = async () => {
+  const connectPWA = async (walletWindow?: Window | null) => {
     // Try BroadcastChannel first (instant if wallet PWA is open)
     const pwaDetected = await detectPWAWallet(1200);
     if (pwaDetected) {
+      // Don't need the pre-opened tab for BroadcastChannel
+      try { walletWindow?.close(); } catch { /* ignore */ }
       return connectBroadcast();
     }
 
@@ -152,6 +158,11 @@ export function useWallet() {
     const wlData = url.searchParams.get('session') || '';
     
     setWalletLinkSession({ deepLink: deepLinkUrl, wlData });
+
+    // Auto-open wallet in the pre-opened tab (avoids popup blockers)
+    if (walletWindow && !walletWindow.closed) {
+      walletWindow.location.href = deepLinkUrl;
+    }
 
     return new Promise<string>((resolve, reject) => {
       const unsub = walletLink.on((event) => {

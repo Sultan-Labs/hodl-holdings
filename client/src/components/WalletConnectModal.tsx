@@ -49,9 +49,13 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
   };
 
   const handlePWAConnect = async () => {
-    setStatus('waiting');
+    setStatus('generating');
     try {
-      await connectPWA();
+      // Pre-open wallet tab during user gesture to avoid popup blockers.
+      // It will be redirected to the deep-link URL once the session is ready.
+      const walletTab = window.open('about:blank', '_blank');
+      setStatus('waiting');
+      await connectPWA(walletTab);
     } catch (err) {
       console.error("PWA connection failed:", err);
       setStatus('error');
