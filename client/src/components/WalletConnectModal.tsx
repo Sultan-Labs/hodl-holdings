@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Smartphone, Check, Wallet, Loader2, X } from "lucide-react";
+import { Smartphone, Check, Wallet, Loader2, X, Radio } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useWallet } from "@/lib/wallet";
 
@@ -16,10 +16,10 @@ interface WalletConnectModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type ConnectionStatus = 'idle' | 'generating' | 'waiting' | 'connected' | 'error';
+type ConnectionStatus = 'idle' | 'generating' | 'waiting' | 'broadcast-waiting' | 'connected' | 'error';
 
 export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalProps) {
-  const { connect, connectPWA, isExtensionAvailable, walletLinkSession, isConnected } = useWallet();
+  const { connect, connectPWA, connectBroadcast, isExtensionAvailable, isPWAAvailable, walletLinkSession, isConnected } = useWallet();
   const [status, setStatus] = useState<ConnectionStatus>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +30,19 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
       onOpenChange(false);
     } catch (err) {
       console.error("Extension connection failed:", err);
+      setStatus('error');
+      setError(err instanceof Error ? err.message : 'Connection failed');
+    }
+  };
+
+  /** Direct BroadcastChannel connect (same-browser PWA). */
+  const handleBroadcastConnect = async () => {
+    setStatus('broadcast-waiting');
+    try {
+      await connectBroadcast();
+      onOpenChange(false);
+    } catch (err) {
+      console.error("BroadcastChannel connection failed:", err);
       setStatus('error');
       setError(err instanceof Error ? err.message : 'Connection failed');
     }
@@ -55,7 +68,7 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
 
   // Close modal when connected
   useEffect(() => {
-    if (open && isConnected && status === 'waiting') {
+    if (open && isConnected && (status === 'waiting' || status === 'broadcast-waiting')) {
       onOpenChange(false);
     }
   }, [isConnected, open, status, onOpenChange]);
@@ -112,6 +125,33 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
                     <div className="text-[10px] bg-white/5 px-2 py-1 rounded text-white/40">Not Found</div>
                   )}
                   {status === 'generating' && <Loader2 className="w-4 h-4 animate-spin text-white/20" />}
+                </Button>
+
+                {/* Same-browser PWA via BroadcastChannel — shown when wallet PWA is detected */}
+                <Button
+                  onClick={handleBroadcastConnect}
+                  disabled={!isPWAAvailable || status === 'broadcast-waiting'}
+                  className={`w-full justify-between h-16 rounded-2xl px-6 transition-all border ${
+                    isPWAAvailable
+                      ? "glass-soft border-[#55FFAC]/20 hover:border-[#55FFAC]/40 hover:bg-white/5 text-white"
+                      : "bg-white/5 border-transparent text-white/20 cursor-not-allowed"
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${isPWAAvailable ? "bg-[#55FFAC]/10 text-[#55FFAC]" : "bg-white/5 text-white/10"}`}>
+                      <Radio className="h-4 w-4" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-sm font-semibold">Same Browser (PWA)</div>
+                      <div className="text-[10px] uppercase tracking-widest opacity-40">
+                        {isPWAAvailable ? 'Wallet detected — instant' : 'Open wallet.sltn.io first'}
+                      </div>
+                    </div>
+                  </div>
+                  {!isPWAAvailable && (
+                    <div className="text-[10px] bg-white/5 px-2 py-1 rounded text-white/40">Not Found</div>
+                  )}
+                  {status === 'broadcast-waiting' && <Loader2 className="w-4 h-4 animate-spin text-[#55FFAC]/60" />}
                 </Button>
 
                 <Button
